@@ -215,7 +215,6 @@ export default function Home() {
             Misses left:{" "}
             {attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
           </span>
-          <span>Guesses: {guesses.length}</span>
         </div>
 
         {/* Guess Input */}
@@ -255,10 +254,10 @@ export default function Home() {
           <div className="text-center space-y-2">
             <p className="text-xl">
               {result.is_correct
-                ? "✅ Correct! You got one of the top answers."
+                ? "✅ Correct."
                 : result.is_complete
                 ? "❌ Out of attempts."
-                : "Keep trying!"}
+                : "Wrong guess"}
             </p>
             {typeof result.streak === "number" && (
               <p className="text-sm">🔥 Streak: {result.streak}</p>
@@ -293,12 +292,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Guesses */}
-        {guesses.length > 0 && (
-          <div className="text-sm text-gray-500">
-            Your guesses: {guesses.join(", ")}
-          </div>
-        )}
+        {/* Guesses list removed */}
       </div>
     </AppShell>
   );
