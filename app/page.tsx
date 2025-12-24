@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppShell from "./components/AppShell";
 
-const MAX_ATTEMPTS_FALLBACK = 3;
+const MAX_ATTEMPTS_FALLBACK = 5;
 
 type ResultState = {
   is_correct: boolean;
@@ -26,6 +26,50 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const getLocalDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+  const buildAcceptableAnswers = (answer: string) => {
+    const normalized = normalize(answer);
+    const parts = normalized.split(" ").filter(Boolean);
+    if (!parts.length) return [];
+    const last = parts[parts.length - 1];
+    const lastName =
+      suffixes.has(last) && parts.length > 1
+        ? parts[parts.length - 2]
+        : last;
+    return Array.from(new Set([normalized, lastName].filter(Boolean)));
+  };
+
+  const answers = Array.isArray(question?.options) ? question.options : [];
+  const acceptableAnswers = answers.map((answer) =>
+    buildAcceptableAnswers(answer.toString())
+  );
+  const normalizedGuesses = guesses.map((item) =>
+    normalize(item.toString())
+  );
+  const revealAll = Boolean(result?.is_complete);
+  const revealedAnswers = answers.map((_, index) => {
+    const options = acceptableAnswers[index] ?? [];
+    return (
+      revealAll || normalizedGuesses.some((guess) => options.includes(guess))
+    );
+  });
+  const foundCount = revealedAnswers.filter(Boolean).length;
+
   // 🔹 Auth check
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -38,9 +82,16 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
 
-    fetch(`/api/today?user_id=${user.id}`)
-      .then((res) => res.json())
-      .then((data) => {
+    const loadToday = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const localDate = getLocalDateString();
+      await fetch(`/api/today?user_id=${user.id}&date=${localDate}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((res) => res.json())
+        .then((data) => {
         setQuestion(data);
         setGuesses(data.guesses ?? []);
         setAttemptsRemaining(
@@ -56,6 +107,9 @@ export default function Home() {
           });
         }
       });
+    };
+
+    loadToday();
   }, [user]);
 
   const submitAnswer = async () => {
@@ -65,11 +119,19 @@ export default function Home() {
     setSubmitting(true);
     setError(null);
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const localDate = getLocalDateString();
+
     const res = await fetch("/api/submit", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         user_id: user.id,
+        question_date: localDate,
         guess: trimmed,
       }),
     });
@@ -139,7 +201,7 @@ export default function Home() {
         <div className="text-center">
           <h1 className="text-2xl font-semibold">Question of the Day</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Find any of the top {question?.options?.length ?? 0} answers.
+            Find any of the top {answers.length} answers.
           </p>
         </div>
 
@@ -150,14 +212,20 @@ export default function Home() {
 
         <div className="flex items-center justify-between text-sm text-gray-500">
           <span>
-            Attempts left:{" "}
+            Misses left:{" "}
             {attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
           </span>
           <span>Guesses: {guesses.length}</span>
         </div>
 
         {/* Guess Input */}
-        <div className="space-y-3">
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitAnswer();
+          }}
+        >
           <input
             type="text"
             value={guess}
@@ -167,7 +235,7 @@ export default function Home() {
             className="w-full py-3 rounded-md border px-4 focus:outline-none focus:ring-2 focus:ring-black disabled:bg-gray-100"
           />
           <button
-            onClick={submitAnswer}
+            type="submit"
             disabled={
               submitting ||
               !guess.trim() ||
@@ -180,7 +248,7 @@ export default function Home() {
           {error && (
             <p className="text-sm text-red-600 text-center">{error}</p>
           )}
-        </div>
+        </form>
 
         {/* Results */}
         {result && (
@@ -192,17 +260,38 @@ export default function Home() {
                 ? "❌ Out of attempts."
                 : "Keep trying!"}
             </p>
-            {result.is_complete && (
-              <p className="text-gray-600">
-                Answers:{" "}
-                <b>{(result.correct_answers ?? []).join(", ")}</b>
-              </p>
-            )}
             {typeof result.streak === "number" && (
               <p className="text-sm">🔥 Streak: {result.streak}</p>
             )}
           </div>
         )}
+
+        {/* Answers Grid */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>
+              Found: {foundCount} / {answers.length}
+            </span>
+            {revealAll && <span>All answers revealed</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {answers.map((answer, index) => {
+              const isRevealed = revealedAnswers[index];
+              return (
+                <div
+                  key={`${answer}-${index}`}
+                  className={`rounded-md border px-3 py-2 text-sm ${
+                    isRevealed
+                      ? "border-black bg-white text-black"
+                      : "border-gray-200 bg-gray-100 text-gray-400"
+                  }`}
+                >
+                  {isRevealed ? answer : "Hidden"}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Guesses */}
         {guesses.length > 0 && (
