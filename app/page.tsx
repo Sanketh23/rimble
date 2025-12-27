@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AppShell from "./components/AppShell";
 import CardGrid from "./components/CardGrid";
@@ -246,8 +247,25 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center">
-        Please log in
+      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center shadow-xl shadow-black/40">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-300">
+            Rimble
+          </p>
+          <h1 className="mt-3 text-3xl font-black uppercase tracking-[0.08em]">
+            Log in to play
+          </h1>
+          <p className="mt-2 text-sm text-white/70">
+            Create an account or sign in to save streaks and play today&apos;s
+            puzzle.
+          </p>
+          <Link
+            href="/login"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 via-blue-600 to-red-500 px-6 py-4 text-lg font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-red-500/30 transition hover:translate-y-[-1px] hover:shadow-red-500/50"
+          >
+            Go to Login
+          </Link>
+        </div>
       </div>
     );
   }
