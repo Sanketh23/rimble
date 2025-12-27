@@ -67,9 +67,13 @@ export default function Home() {
     return Array.from(new Set([normalized, lastName].filter(Boolean)));
   };
 
-  const answers = Array.isArray(question?.options) ? question.options : [];
-  const acceptableAnswers = answers.map((answer) =>
-    buildAcceptableAnswers(answer.toString())
+  const answers: string[] = Array.isArray(question?.options)
+    ? (question.options as unknown[]).map(
+        (item) => item?.toString() ?? ""
+      )
+    : [];
+  const acceptableAnswers = answers.map((answer: string) =>
+    buildAcceptableAnswers(answer)
   );
   const answerLogos = Array.isArray(question?.option_logos)
     ? question.option_logos
