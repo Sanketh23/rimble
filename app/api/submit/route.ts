@@ -178,6 +178,9 @@ export async function POST(req: Request) {
   const allFound = acceptableAnswers.length > 0 && foundMap.every(Boolean);
   const isComplete = allFound || missesAfter >= MAX_MISSES;
   const didWin = allFound;
+  const correctGuesses = attemptsCombined
+    .filter((attempt) => attempt.is_correct)
+    .map((attempt) => attempt.selected_answer);
 
   let streak: number | null = null;
 
@@ -214,6 +217,7 @@ export async function POST(req: Request) {
       ...(attempts?.map((attempt) => attempt.selected_answer) ?? []),
       submitted,
     ],
+    correct_guesses: correctGuesses,
     correct_answers: isComplete ? answers : undefined,
   });
 }

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AppShell from "./components/AppShell";
+import CardGrid from "./components/CardGrid";
+import GuessInput from "./components/GuessInput";
+import QuestionHeader from "./components/QuestionHeader";
 
 const MAX_ATTEMPTS_FALLBACK = 5;
 
@@ -19,12 +22,16 @@ export default function Home() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [guess, setGuess] = useState("");
   const [guesses, setGuesses] = useState<string[]>([]);
+  const [correctGuesses, setCorrectGuesses] = useState<string[]>([]);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(
     null
   );
   const [result, setResult] = useState<ResultState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [lastOutcome, setLastOutcome] = useState<
+    "correct" | "incorrect" | "duplicate" | null
+  >(null);
 
   const getLocalDateString = () => {
     const now = new Date();
@@ -42,6 +49,12 @@ export default function Home() {
       .trim();
 
   const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+  const retiredPlayers = new Set([
+    "kyle korver",
+    "wesley matthews",
+    "jj redick",
+    "kemba walker",
+  ]);
   const buildAcceptableAnswers = (answer: string) => {
     const normalized = normalize(answer);
     const parts = normalized.split(" ").filter(Boolean);
@@ -58,17 +71,52 @@ export default function Home() {
   const acceptableAnswers = answers.map((answer) =>
     buildAcceptableAnswers(answer.toString())
   );
-  const normalizedGuesses = guesses.map((item) =>
+  const answerLogos = Array.isArray(question?.option_logos)
+    ? question.option_logos
+    : [];
+  const normalizedCorrectGuesses = correctGuesses.map((item) =>
     normalize(item.toString())
+  );
+  const normalizedRevealGuesses = Array.from(
+    new Set([
+      ...normalizedCorrectGuesses,
+      ...guesses.map((item) => normalize(item.toString())),
+    ])
   );
   const revealAll = Boolean(result?.is_complete);
   const revealedAnswers = answers.map((_, index) => {
     const options = acceptableAnswers[index] ?? [];
     return (
-      revealAll || normalizedGuesses.some((guess) => options.includes(guess))
+      revealAll ||
+      normalizedRevealGuesses.some((guess) => options.includes(guess))
     );
   });
+  const retiredFlags = answers.map((answer) =>
+    retiredPlayers.has(normalize(answer.toString()))
+  );
   const foundCount = revealedAnswers.filter(Boolean).length;
+  const maxMisses =
+    typeof question?.max_attempts === "number"
+      ? question.max_attempts
+      : MAX_ATTEMPTS_FALLBACK;
+  const resolveLogoSrc = (logo: string | undefined) => {
+    if (!logo) return null;
+    const trimmed = logo.toString().trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith("http") || trimmed.startsWith("/")) {
+      return trimmed;
+    }
+    return `/images/${trimmed}`;
+  };
+  const resolveLogoList = (logoEntry: unknown) => {
+    if (Array.isArray(logoEntry)) {
+      return logoEntry
+        .map((item) => resolveLogoSrc(item?.toString()))
+        .filter((item): item is string => Boolean(item));
+    }
+    const single = resolveLogoSrc(logoEntry?.toString());
+    return single ? [single] : [];
+  };
 
   // 🔹 Auth check
   useEffect(() => {
@@ -94,6 +142,7 @@ export default function Home() {
         .then((data) => {
         setQuestion(data);
         setGuesses(data.guesses ?? []);
+        setCorrectGuesses(data.correct_guesses ?? []);
         setAttemptsRemaining(
           typeof data.attempts_remaining === "number"
             ? data.attempts_remaining
@@ -118,6 +167,7 @@ export default function Home() {
 
     setSubmitting(true);
     setError(null);
+    setLastOutcome(null);
 
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -140,11 +190,17 @@ export default function Home() {
 
     if (!res.ok) {
       setError(payload.error ?? "Something went wrong.");
+      if (payload.error === "Already guessed") {
+        setLastOutcome("duplicate");
+      }
       if (typeof payload.attempts_remaining === "number") {
         setAttemptsRemaining(payload.attempts_remaining);
       }
       if (payload.guesses) {
         setGuesses(payload.guesses);
+      }
+      if (payload.correct_guesses) {
+        setCorrectGuesses(payload.correct_guesses);
       }
       if (payload.is_complete) {
         setResult({
@@ -160,6 +216,11 @@ export default function Home() {
 
     setGuess("");
     setGuesses(payload.guesses ?? []);
+    if (payload.correct_guesses) {
+      setCorrectGuesses(payload.correct_guesses);
+    } else if (payload.is_correct) {
+      setCorrectGuesses((prev) => [...prev, trimmed]);
+    }
     setAttemptsRemaining(payload.attempts_remaining ?? attemptsRemaining);
     setResult({
       is_correct: payload.is_correct,
@@ -167,12 +228,13 @@ export default function Home() {
       correct_answers: payload.correct_answers,
       streak: payload.streak ?? null,
     });
+    setLastOutcome(payload.is_correct ? "correct" : "incorrect");
     setSubmitting(false);
   };
 
   if (loadingUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center">
         Loading…
       </div>
     );
@@ -180,7 +242,7 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center">
         Please log in
       </div>
     );
@@ -188,111 +250,75 @@ export default function Home() {
 
   if (!question) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center">
         Loading today’s question…
       </div>
     );
   }
 
   return (
-    <AppShell>
-      <div className="space-y-6">
-        {/* Title */}
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold">Question of the Day</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Find any of the top {answers.length} answers.
-          </p>
-        </div>
-
-        {/* Question */}
-        <div className="text-lg text-center leading-relaxed">
-          {question.question}
-        </div>
-
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>
-            Misses left:{" "}
-            {attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
+    <AppShell streak={result?.streak ?? null}>
+      <div className="space-y-8">
+        <QuestionHeader
+          title={question.question}
+          subtitle={`Find any of the top ${answers.length} answers.`}
+          missesLeft={attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
+          maxMisses={maxMisses}
+        />
+        <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
+          <span className="block">Active players show current team logo.</span>
+          <span className="block mt-2">
+            * Retired players show longest-tenured team.
           </span>
-        </div>
+        </p>
 
-        {/* Guess Input */}
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitAnswer();
-          }}
-        >
-          <input
-            type="text"
-            value={guess}
-            onChange={(e) => setGuess(e.target.value)}
-            disabled={result?.is_complete}
-            placeholder="Type your guess"
-            className="w-full py-3 rounded-md border px-4 focus:outline-none focus:ring-2 focus:ring-black disabled:bg-gray-100"
-          />
-          <button
-            type="submit"
-            disabled={
-              submitting ||
-              !guess.trim() ||
-              Boolean(result?.is_complete)
-            }
-            className="w-full py-3 bg-black text-white rounded-md disabled:opacity-50"
-          >
-            Submit Guess
-          </button>
-          {error && (
-            <p className="text-sm text-red-600 text-center">{error}</p>
-          )}
-        </form>
+        <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-6">
+            <GuessInput
+              guess={guess}
+              onGuessChange={setGuess}
+              onSubmit={submitAnswer}
+              disabled={Boolean(result?.is_complete)}
+              submitting={submitting}
+              error={error}
+              outcome={lastOutcome}
+            />
 
-        {/* Results */}
-        {result && (
-          <div className="text-center space-y-2">
-            <p className="text-xl">
-              {result.is_correct
-                ? "✅ Correct."
-                : result.is_complete
-                ? "❌ Out of attempts."
-                : "Wrong guess"}
-            </p>
-            {typeof result.streak === "number" && (
-              <p className="text-sm">🔥 Streak: {result.streak}</p>
+            {result && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center text-lg font-semibold text-white/90">
+                {result.is_correct
+                  ? "✅ Correct."
+                  : result.is_complete
+                  ? "❌ Out of attempts."
+                  : "❗ Wrong guess."}
+              </div>
             )}
           </div>
-        )}
 
-        {/* Answers Grid */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>
-              Found: {foundCount} / {answers.length}
-            </span>
-            {revealAll && <span>All answers revealed</span>}
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 via-transparent to-red-500/10 p-6 text-center text-white/80">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">
+              Daily Rules
+            </p>
+            <p className="mt-3 text-lg font-black uppercase text-white">
+              5 misses max
+            </p>
+            <p className="mt-2 text-sm">
+              Keep guessing until you run out of misses.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {answers.map((answer, index) => {
-              const isRevealed = revealedAnswers[index];
-              return (
-                <div
-                  key={`${answer}-${index}`}
-                  className={`rounded-md border px-3 py-2 text-sm ${
-                    isRevealed
-                      ? "border-black bg-white text-black"
-                      : "border-gray-200 bg-gray-100 text-gray-400"
-                  }`}
-                >
-                  {isRevealed ? answer : "Hidden"}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        </section>
 
-        {/* Guesses list removed */}
+        <CardGrid
+          answers={answers}
+          revealed={revealedAnswers}
+          logos={answers.map((_, index) =>
+            resolveLogoList(answerLogos[index])
+          )}
+          retiredFlags={retiredFlags}
+          foundCount={foundCount}
+          totalCount={answers.length}
+          revealAll={revealAll}
+        />
       </div>
     </AppShell>
   );

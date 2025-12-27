@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("questions")
-    .select("question, options, question_date")
+    .select("question, options, option_logos, question_date")
     .eq("question_date", today)
     .single();
 
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   if (!userId) {
     return NextResponse.json({
       ...data,
-      max_attempts: MAX_ATTEMPTS,
+      max_attempts: MAX_MISSES,
     });
   }
 
@@ -77,12 +77,17 @@ export async function GET(req: Request) {
   );
   const allFound = acceptableAnswers.length > 0 && foundMap.every(Boolean);
   const isComplete = allFound || missesUsed >= MAX_MISSES;
+  const correctGuesses =
+    attempts
+      ?.filter((attempt) => attempt.is_correct)
+      .map((attempt) => attempt.selected_answer) ?? [];
 
   return NextResponse.json({
     ...data,
     max_attempts: MAX_MISSES,
     attempts_remaining: Math.max(MAX_MISSES - missesUsed, 0),
     guesses: attempts?.map((attempt) => attempt.selected_answer) ?? [],
+    correct_guesses: correctGuesses,
     is_complete: isComplete,
     is_solved: allFound,
     correct_answers: isComplete ? answers : undefined,

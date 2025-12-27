@@ -1,27 +1,48 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b1220;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-body);
 }
 
 body {
   margin: 0;
-  background: white;
-  color: #111827; /* slate-900 */
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
+  color: var(--foreground);
+  font-family: var(--font-body), ui-sans-serif, system-ui;
+  background:
+    radial-gradient(1200px circle at 10% 0%, #172340 0%, transparent 55%),
+    radial-gradient(900px circle at 90% 0%, #2a1633 0%, transparent 55%),
+    #0b1220;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-1.5deg);
+  }
+  75% {
+    transform: rotate(1.5deg);
+  }
 }
