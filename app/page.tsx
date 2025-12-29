@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import AppShell from "./components/AppShell";
 import CardGrid from "./components/CardGrid";
+import EndgameModal from "./components/EndgameModal";
 import GuessInput from "./components/GuessInput";
 import QuestionHeader from "./components/QuestionHeader";
 
@@ -18,6 +19,7 @@ type ResultState = {
 };
 
 export default function Home() {
+  const supabase = getSupabaseClient();
   const [user, setUser] = useState<any>(null);
   const [question, setQuestion] = useState<any | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -33,6 +35,7 @@ export default function Home() {
   const [lastOutcome, setLastOutcome] = useState<
     "correct" | "incorrect" | "duplicate" | null
   >(null);
+  const [showEndgame, setShowEndgame] = useState(false);
 
   const getLocalDateString = () => {
     const now = new Date();
@@ -50,12 +53,6 @@ export default function Home() {
       .trim();
 
   const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
-  const retiredPlayers = new Set([
-    "kyle korver",
-    "wesley matthews",
-    "jj redick",
-    "kemba walker",
-  ]);
   const buildAcceptableAnswers = (answer: string) => {
     const normalized = normalize(answer);
     const parts = normalized.split(" ").filter(Boolean);
@@ -88,20 +85,29 @@ export default function Home() {
       ...guesses.map((item) => normalize(item.toString())),
     ])
   );
-  const revealAll = Boolean(result?.is_complete);
-  const revealedAnswers = answers.map((_, index) => {
+  const retiredPlayers = new Set(
+    Array.isArray(question?.retired_players)
+      ? question.retired_players.map((name: unknown) =>
+          normalize(name?.toString() ?? "")
+        )
+      : []
+  );
+  const foundMap = answers.map((_, index) => {
     const options = acceptableAnswers[index] ?? [];
-    return (
-      revealAll ||
-      normalizedRevealGuesses.some((guess) => options.includes(guess))
-    );
+    return normalizedRevealGuesses.some((guess) => options.includes(guess));
   });
+  const revealAll = Boolean(result?.is_complete);
+  const revealedAnswers = revealAll
+    ? answers.map(() => true)
+    : foundMap;
   const retiredFlags = answers.map((answer) =>
     retiredPlayers.has(normalize(answer.toString()))
   );
-  const foundCount = revealedAnswers.filter(Boolean).length;
+  const foundCount = foundMap.filter(Boolean).length;
   const maxMisses =
-    typeof question?.max_attempts === "number"
+    typeof question?.max_misses === "number"
+      ? question.max_misses
+      : typeof question?.max_attempts === "number"
       ? question.max_attempts
       : MAX_ATTEMPTS_FALLBACK;
   const resolveLogoSrc = (logo: string | undefined) => {
@@ -122,18 +128,48 @@ export default function Home() {
     const single = resolveLogoSrc(logoEntry?.toString());
     return single ? [single] : [];
   };
+  const missesUsed = Math.max(
+    maxMisses - (attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK),
+    0
+  );
+  const isWin = foundCount === answers.length && answers.length > 0;
+  const shareColumns = Math.min(
+    6,
+    Math.max(4, Math.round(Math.sqrt(Math.max(answers.length, 1))))
+  );
+  const buildShareText = () => {
+    const today = getLocalDateString();
+    const cells = foundMap.map((found) => (found ? "🟩" : "🟥"));
+    const rows: string[] = [];
+    for (let i = 0; i < cells.length; i += shareColumns) {
+      rows.push(cells.slice(i, i + shareColumns).join(""));
+    }
+    const grid = rows.join("\n");
+    const link =
+      typeof window !== "undefined" ? window.location.origin : "";
+    return `Rimble ${today}\n${foundCount}/${answers.length} found\n${grid}\nTry to beat my score: ${link}`;
+  };
+  const handleShare = async () => {
+    const text = buildShareText();
+    if (navigator.share) {
+      await navigator.share({ text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+  };
 
   // 🔹 Auth check
   useEffect(() => {
+    if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setLoadingUser(false);
     });
-  }, []);
+  }, [supabase]);
 
   // 🔹 Fetch today's question (only after login)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !supabase) return;
 
     const loadToday = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -164,11 +200,17 @@ export default function Home() {
     };
 
     loadToday();
-  }, [user]);
+  }, [user, supabase]);
+
+  useEffect(() => {
+    if (result?.is_complete) {
+      setShowEndgame(true);
+    }
+  }, [result?.is_complete]);
 
   const submitAnswer = async () => {
     const trimmed = guess.trim();
-    if (!trimmed || !user || submitting) return;
+    if (!trimmed || !user || submitting || !supabase) return;
 
     setSubmitting(true);
     setError(null);
@@ -245,6 +287,14 @@ export default function Home() {
     );
   }
 
+  if (!supabase) {
+    return (
+      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center">
+        Missing Supabase configuration.
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center px-6">
@@ -287,12 +337,28 @@ export default function Home() {
           missesLeft={attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
           maxMisses={maxMisses}
         />
-        <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
-          <span className="block">Active players show current team logo.</span>
-          <span className="block mt-2">
-            * Retired players show longest-tenured team.
-          </span>
-        </p>
+        {typeof question?.rules_note === "string" ? (
+          <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
+            {question.rules_note
+              .split("\n")
+              .filter((line: string) => line.trim().length > 0)
+              .map((line: string, index: number) => (
+                <span
+                  key={`rule-${index}`}
+                  className={`block ${index > 0 ? "mt-2" : ""}`}
+                >
+                  {line}
+                </span>
+              ))}
+          </p>
+        ) : (
+          <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
+            <span className="block">Active players show current team logo.</span>
+            <span className="block mt-2">
+              * Retired players show longest-tenured team.
+            </span>
+          </p>
+        )}
 
         <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
@@ -322,7 +388,7 @@ export default function Home() {
               Daily Rules
             </p>
             <p className="mt-3 text-lg font-black uppercase text-white">
-              5 misses max
+              {maxMisses} misses max
             </p>
             <p className="mt-2 text-sm">
               Keep guessing until you run out of misses.
@@ -342,6 +408,18 @@ export default function Home() {
           revealAll={revealAll}
         />
       </div>
+      <EndgameModal
+        open={showEndgame}
+        onClose={() => setShowEndgame(false)}
+        isWin={isWin}
+        foundMap={foundMap}
+        foundCount={foundCount}
+        totalCount={answers.length}
+        missesUsed={missesUsed}
+        maxMisses={maxMisses}
+        onShare={handleShare}
+        columns={shareColumns}
+      />
     </AppShell>
   );
 }

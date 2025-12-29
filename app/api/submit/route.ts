@@ -20,7 +20,6 @@ export async function POST(req: Request) {
   const today = isValidDate
     ? requestedDate
     : new Date().toISOString().split("T")[0];
-  const MAX_MISSES = 5;
   const submitted = (guess ?? selected_answer ?? "").toString().trim();
 
   if (!user_id) {
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
 
   const { data: question, error: questionError } = await supabase
     .from("questions")
-    .select("options")
+    .select("options, max_misses")
     .eq("question_date", today)
     .single();
 
@@ -81,6 +80,8 @@ export async function POST(req: Request) {
   }
 
   const answers = Array.isArray(question.options) ? question.options : [];
+  const maxMisses =
+    typeof question.max_misses === "number" ? question.max_misses : 5;
   const acceptableAnswers = answers.map((answer) =>
     buildAcceptableAnswers(answer.toString())
   );
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
   const missesUsed =
     attempts?.filter((attempt) => !attempt.is_correct).length ?? 0;
 
-  if (missesUsed >= MAX_MISSES) {
+  if (missesUsed >= maxMisses) {
     return NextResponse.json(
       {
         error: "No attempts left",
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Already guessed",
-        attempts_remaining: Math.max(MAX_MISSES - missesUsed, 0),
+        attempts_remaining: Math.max(maxMisses - missesUsed, 0),
         guesses: attempts?.map((attempt) => attempt.selected_answer) ?? [],
         is_complete: false,
       },
@@ -163,7 +164,7 @@ export async function POST(req: Request) {
   }
 
   const missesAfter = missesUsed + (is_correct ? 0 : 1);
-  const attemptsRemaining = Math.max(MAX_MISSES - missesAfter, 0);
+  const attemptsRemaining = Math.max(maxMisses - missesAfter, 0);
   const attemptsCombined = [
     ...(attempts ?? []),
     { selected_answer: submitted, is_correct },
@@ -176,7 +177,7 @@ export async function POST(req: Request) {
     )
   );
   const allFound = acceptableAnswers.length > 0 && foundMap.every(Boolean);
-  const isComplete = allFound || missesAfter >= MAX_MISSES;
+  const isComplete = allFound || missesAfter >= maxMisses;
   const didWin = allFound;
   const correctGuesses = attemptsCombined
     .filter((attempt) => attempt.is_correct)
