@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase";
 import AppShell from "./components/AppShell";
 import CardGrid from "./components/CardGrid";
@@ -188,23 +187,29 @@ export default function Home() {
 
   // 🔹 Auth check
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setLoadingUser(false);
+      return;
+    }
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setLoadingUser(false);
     });
   }, [supabase]);
 
-  // 🔹 Fetch today's question (only after login)
+  // 🔹 Fetch today's question (guest or logged in)
   useEffect(() => {
-    if (!user || !supabase) return;
+    if (loadingUser) return;
 
     const loadToday = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
       const localDate = getLocalDateString();
-      await fetch(`/api/today?user_id=${user.id}&date=${localDate}`, {
+      const query = user
+        ? `/api/today?user_id=${user.id}&date=${localDate}`
+        : `/api/today?date=${localDate}`;
+      const token = user && supabase
+        ? (await supabase.auth.getSession()).data.session?.access_token
+        : null;
+      await fetch(query, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then((res) => res.json())
@@ -215,6 +220,10 @@ export default function Home() {
         setAttemptsRemaining(
           typeof data.attempts_remaining === "number"
             ? data.attempts_remaining
+            : typeof data.max_misses === "number"
+            ? data.max_misses
+            : typeof data.max_attempts === "number"
+            ? data.max_attempts
             : MAX_ATTEMPTS_FALLBACK
         );
         if (data.is_complete) {
@@ -228,7 +237,7 @@ export default function Home() {
     };
 
     loadToday();
-  }, [user, supabase]);
+  }, [loadingUser, user, supabase]);
 
   useEffect(() => {
     if (!user || !supabase) return;
@@ -252,7 +261,59 @@ export default function Home() {
 
   const submitAnswer = async () => {
     const trimmed = guess.trim();
-    if (!trimmed || !user || submitting || !supabase) return;
+    if (!trimmed || submitting) return;
+    if (!user) {
+      const normalizedGuess = normalize(trimmed);
+      const matchedAnswerIndex = acceptableAnswers.findIndex((options) =>
+        options.includes(normalizedGuess)
+      );
+      const alreadyGuessed =
+        normalizedRevealGuesses.includes(normalizedGuess) ||
+        (matchedAnswerIndex >= 0 && foundMap[matchedAnswerIndex]);
+
+      setSubmitting(true);
+      setError(null);
+
+      if (alreadyGuessed) {
+        setError("Already guessed");
+        setLastOutcome("duplicate");
+        setSubmitting(false);
+        return;
+      }
+
+      const nextGuesses = [...guesses, trimmed];
+      const nextCorrectGuesses =
+        matchedAnswerIndex >= 0 ? [...correctGuesses, trimmed] : correctGuesses;
+      const normalizedNextCorrect = nextCorrectGuesses.map((item) =>
+        normalize(item.toString())
+      );
+      const nextFoundMap = acceptableAnswers.map((options) =>
+        normalizedNextCorrect.some((guessValue) =>
+          options.includes(guessValue)
+        )
+      );
+      const allFound =
+        nextFoundMap.length > 0 && nextFoundMap.every(Boolean);
+
+      let nextAttemptsRemaining =
+        attemptsRemaining ?? maxMisses ?? MAX_ATTEMPTS_FALLBACK;
+      if (matchedAnswerIndex < 0) {
+        nextAttemptsRemaining = Math.max(nextAttemptsRemaining - 1, 0);
+      }
+
+      setGuess("");
+      setGuesses(nextGuesses);
+      setCorrectGuesses(nextCorrectGuesses);
+      setAttemptsRemaining(nextAttemptsRemaining);
+      setResult({
+        is_correct: matchedAnswerIndex >= 0,
+        is_complete: allFound || nextAttemptsRemaining <= 0,
+      });
+      setLastOutcome(matchedAnswerIndex >= 0 ? "correct" : "incorrect");
+      setSubmitting(false);
+      return;
+    }
+    if (!supabase) return;
 
     setSubmitting(true);
     setError(null);
@@ -341,28 +402,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-[#0B1220] text-white flex items-center justify-center px-6">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center shadow-xl shadow-black/40">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-300">
-            Rimble
-          </p>
-          <h1 className="mt-3 text-3xl font-black uppercase tracking-[0.08em]">
-            Log in to play
-          </h1>
-          <p className="mt-2 text-sm text-white/70">
-            Create an account or sign in to save streaks and play today&apos;s
-            puzzle.
-          </p>
-          <Link
-            href="/login"
-            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 via-blue-600 to-red-500 px-6 py-4 text-lg font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-red-500/30 transition hover:translate-y-[-1px] hover:shadow-red-500/50"
-          >
-            Go to Login
-          </Link>
-        </div>
-      </div>
-    );
+    // Guest mode: allow play without login.
   }
 
   if (!question) {
@@ -376,6 +416,7 @@ export default function Home() {
   return (
     <AppShell
       streak={typeof currentStreak === "number" ? currentStreak : null}
+      isGuest={!user}
     >
       <div className="space-y-8">
         <QuestionHeader
@@ -384,6 +425,12 @@ export default function Home() {
           missesLeft={attemptsRemaining ?? MAX_ATTEMPTS_FALLBACK}
           maxMisses={maxMisses}
         />
+        {!user && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center text-sm font-semibold text-white/80">
+            Playing as guest — streaks and stats won&apos;t be saved. Click the
+            profile icon to log in.
+          </div>
+        )}
         {typeof question?.rules_note === "string" ? (
           <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
             {question.rules_note
