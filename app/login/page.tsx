@@ -14,16 +14,22 @@ export default function Login() {
     const router = useRouter();
 
     useEffect(() => {
+        if (!supabase) return;
         supabase.auth.getUser().then(({ data }) => {
             if (data.user) {
                 router.push("/");
             }
         });
-    }, [router]);
+    }, [router, supabase]);
 
     const signIn = async () => {
         setLoading(true);
         setError(null);
+        if (!supabase) {
+            setError("Missing Supabase configuration.");
+            setLoading(false);
+            return;
+        }
 
         const { error } = await supabase.auth.signInWithPassword({
             email,
@@ -42,6 +48,11 @@ export default function Login() {
     const signUp = async () => {
         setLoading(true);
         setError(null);
+        if (!supabase) {
+            setError("Missing Supabase configuration.");
+            setLoading(false);
+            return;
+        }
 
         const { data, error } = await supabase.auth.signUp({
             email,
