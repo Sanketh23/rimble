@@ -351,6 +351,7 @@ export default function Home() {
         {typeof question?.rules_note === "string" ? (
           <p className="text-center text-sm font-black uppercase tracking-[0.2em] text-white">
             {question.rules_note
+              .replace(/\\n/g, "\n")
               .split("\n")
               .filter((line: string) => line.trim().length > 0)
               .map((line: string, index: number) => (
