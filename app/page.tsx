@@ -65,14 +65,22 @@ export default function Home() {
     return Array.from(new Set([normalized, lastName].filter(Boolean)));
   };
 
-  const answers: string[] = Array.isArray(question?.options)
-    ? (question.options as unknown[]).map(
-        (item) => item?.toString() ?? ""
-      )
+  const optionEntries: unknown[] = Array.isArray(question?.options)
+    ? (question.options as unknown[])
     : [];
-  const acceptableAnswers = answers.map((answer: string) =>
-    buildAcceptableAnswers(answer)
-  );
+  const answers: string[] = optionEntries.map((entry) => {
+    if (Array.isArray(entry)) {
+      return entry.map((value) => value?.toString() ?? "").join(" / ");
+    }
+    return entry?.toString() ?? "";
+  });
+  const acceptableAnswers = optionEntries.map((entry) => {
+    const values = Array.isArray(entry) ? entry : [entry];
+    const flattened = values.flatMap((value) =>
+      buildAcceptableAnswers(value?.toString() ?? "")
+    );
+    return Array.from(new Set(flattened.filter(Boolean)));
+  });
   const answerLogos = Array.isArray(question?.option_logos)
     ? question.option_logos
     : [];
@@ -100,9 +108,12 @@ export default function Home() {
   const revealedAnswers = revealAll
     ? answers.map(() => true)
     : foundMap;
-  const retiredFlags = answers.map((answer) =>
-    retiredPlayers.has(normalize(answer.toString()))
-  );
+  const retiredFlags = optionEntries.map((entry) => {
+    const values = Array.isArray(entry) ? entry : [entry];
+    return values.some((value) =>
+      retiredPlayers.has(normalize(value?.toString() ?? ""))
+    );
+  });
   const foundCount = foundMap.filter(Boolean).length;
   const maxMisses =
     typeof question?.max_misses === "number"

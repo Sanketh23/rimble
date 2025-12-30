@@ -69,9 +69,13 @@ export async function GET(req: Request) {
         : last;
     return Array.from(new Set([normalized, lastName].filter(Boolean)));
   };
-  const acceptableAnswers = answers.map((answer) =>
-    buildAcceptableAnswers(answer.toString())
-  );
+  const acceptableAnswers = answers.map((entry) => {
+    const values = Array.isArray(entry) ? entry : [entry];
+    const flattened = values.flatMap((value) =>
+      buildAcceptableAnswers(value?.toString() ?? "")
+    );
+    return Array.from(new Set(flattened.filter(Boolean)));
+  });
   const foundMap = acceptableAnswers.map((options) =>
     (attempts ?? []).some(
       (attempt) =>

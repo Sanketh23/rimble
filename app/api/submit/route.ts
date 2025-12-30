@@ -82,9 +82,13 @@ export async function POST(req: Request) {
   const answers = Array.isArray(question.options) ? question.options : [];
   const maxMisses =
     typeof question.max_misses === "number" ? question.max_misses : 5;
-  const acceptableAnswers = answers.map((answer) =>
-    buildAcceptableAnswers(answer.toString())
-  );
+  const acceptableAnswers = answers.map((entry) => {
+    const values = Array.isArray(entry) ? entry : [entry];
+    const flattened = values.flatMap((value) =>
+      buildAcceptableAnswers(value?.toString() ?? "")
+    );
+    return Array.from(new Set(flattened.filter(Boolean)));
+  });
 
   const { data: attempts } = await supabase
     .from("attempts")

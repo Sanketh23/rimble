@@ -13,6 +13,17 @@ export default function PlayerCard({
   revealed,
   retired = false,
 }: PlayerCardProps) {
+  const getLogoClass = (logoSrc: string, isRevealed: boolean) => {
+    if (logoSrc.includes("royals")) {
+      return `h-14 w-14 object-contain mix-blend-screen brightness-110 ${
+        isRevealed ? "opacity-90" : "opacity-70"
+      } sm:h-16 sm:w-16`;
+    }
+    return `h-14 w-14 object-contain mix-blend-multiply brightness-95 contrast-90 ${
+      isRevealed ? "opacity-80 saturate-90" : "opacity-70 saturate-75"
+    } sm:h-16 sm:w-16`;
+  };
+
   return (
     <div className="[perspective:1200px]">
       <div
@@ -28,7 +39,7 @@ export default function PlayerCard({
                   key={logoSrc}
                   src={logoSrc}
                   alt=""
-                  className="h-14 w-14 object-contain sm:h-16 sm:w-16"
+                  className={getLogoClass(logoSrc, false)}
                 />
               ))
             ) : (
@@ -47,7 +58,7 @@ export default function PlayerCard({
                   key={logoSrc}
                   src={logoSrc}
                   alt=""
-                  className="h-14 w-14 object-contain sm:h-16 sm:w-16"
+                  className={getLogoClass(logoSrc, true)}
                 />
               ))
             ) : (
