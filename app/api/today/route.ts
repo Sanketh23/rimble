@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const { data, error } = await supabase
     .from("questions")
     .select(
-      "question, options, option_logos, question_date, max_misses, rules_note, retired_players"
+      "question, options, option_logos, option_meta, question_date, max_misses, rules_note, retired_players"
     )
     .eq("question_date", today)
     .single();
