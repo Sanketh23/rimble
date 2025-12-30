@@ -68,6 +68,9 @@ export default function Home() {
   const optionEntries: unknown[] = Array.isArray(question?.options)
     ? (question.options as unknown[])
     : [];
+  const optionMeta: unknown[] = Array.isArray(question?.option_meta)
+    ? (question.option_meta as unknown[])
+    : [];
   const answers: string[] = optionEntries.map((entry) => {
     if (Array.isArray(entry)) {
       return entry.map((value) => value?.toString() ?? "").join(" / ");
@@ -80,6 +83,19 @@ export default function Home() {
       buildAcceptableAnswers(value?.toString() ?? "")
     );
     return Array.from(new Set(flattened.filter(Boolean)));
+  });
+  const metaLabels = optionEntries.map((_, index) => {
+    const entry = optionMeta[index];
+    if (entry === null || entry === undefined) return "";
+    if (Array.isArray(entry)) {
+      const values = entry.map((item) => item?.toString() ?? "").filter(Boolean);
+      return values.length ? values.join(" / ") : "";
+    }
+    if (typeof entry === "object") {
+      const year = (entry as { year?: string | number }).year;
+      return year !== undefined ? year.toString() : "";
+    }
+    return entry.toString();
   });
   const answerLogos = Array.isArray(question?.option_logos)
     ? question.option_logos
@@ -414,6 +430,7 @@ export default function Home() {
           logos={answers.map((_, index) =>
             resolveLogoList(answerLogos[index])
           )}
+          metaLabels={metaLabels}
           retiredFlags={retiredFlags}
           foundCount={foundCount}
           totalCount={answers.length}

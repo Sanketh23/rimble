@@ -6,6 +6,7 @@ type CardGridProps = {
   answers: string[];
   revealed: boolean[];
   logos: string[][];
+  metaLabels?: string[];
   retiredFlags?: boolean[];
   foundCount: number;
   totalCount: number;
@@ -16,6 +17,7 @@ export default function CardGrid({
   answers,
   revealed,
   logos,
+  metaLabels = [],
   retiredFlags = [],
   foundCount,
   totalCount,
@@ -36,6 +38,7 @@ export default function CardGrid({
             name={answer}
             logos={logos[index] ?? []}
             revealed={revealed[index]}
+            metaLabel={metaLabels[index] ?? ""}
             retired={retiredFlags[index] ?? false}
           />
         ))}

@@ -5,6 +5,7 @@ type PlayerCardProps = {
   logos: string[];
   revealed: boolean;
   retired?: boolean;
+  metaLabel?: string;
 };
 
 export default function PlayerCard({
@@ -12,6 +13,7 @@ export default function PlayerCard({
   logos,
   revealed,
   retired = false,
+  metaLabel = "",
 }: PlayerCardProps) {
   const getLogoClass = (logoSrc: string, isRevealed: boolean) => {
     if (logoSrc.includes("royals")) {
@@ -51,6 +53,11 @@ export default function PlayerCard({
           </div>
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-br from-blue-500/20 via-transparent to-red-500/20 px-4 py-5 text-center [transform:rotateY(180deg)] [backface-visibility:hidden]">
+          {metaLabel ? (
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/80">
+              {metaLabel}
+            </span>
+          ) : null}
           <div className="flex flex-wrap items-center justify-center gap-3">
             {logos.length > 0 ? (
               logos.map((logoSrc) => (
