@@ -21,6 +21,11 @@ export default function PlayerCard({
         isRevealed ? "opacity-90" : "opacity-70"
       } sm:h-16 sm:w-16`;
     }
+    if (logoSrc.includes("heat")) {
+      return `h-14 w-14 object-contain mix-blend-darken brightness-90 contrast-90 scale-120 ${
+        isRevealed ? "opacity-90 saturate-100" : "opacity-75 saturate-90"
+      } sm:h-16 sm:w-16`;
+    }
     return `h-14 w-14 object-contain mix-blend-multiply brightness-95 contrast-90 ${
       isRevealed ? "opacity-80 saturate-90" : "opacity-70 saturate-75"
     } sm:h-16 sm:w-16`;

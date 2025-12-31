@@ -36,6 +36,7 @@ export default function Home() {
     "correct" | "incorrect" | "duplicate" | null
   >(null);
   const [showEndgame, setShowEndgame] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState<number | null>(null);
 
   const getLocalDateString = () => {
     const now = new Date();
@@ -230,6 +231,20 @@ export default function Home() {
   }, [user, supabase]);
 
   useEffect(() => {
+    if (!user || !supabase) return;
+    supabase
+      .from("profiles")
+      .select("current_streak")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (typeof data?.current_streak === "number") {
+          setCurrentStreak(data.current_streak);
+        }
+      });
+  }, [user, supabase]);
+
+  useEffect(() => {
     if (result?.is_complete) {
       setShowEndgame(true);
     }
@@ -302,6 +317,9 @@ export default function Home() {
       correct_answers: payload.correct_answers,
       streak: payload.streak ?? null,
     });
+    if (typeof payload.streak === "number") {
+      setCurrentStreak(payload.streak);
+    }
     setLastOutcome(payload.is_correct ? "correct" : "incorrect");
     setSubmitting(false);
   };
@@ -356,7 +374,9 @@ export default function Home() {
   }
 
   return (
-    <AppShell streak={result?.streak ?? null}>
+    <AppShell
+      streak={typeof currentStreak === "number" ? currentStreak : null}
+    >
       <div className="space-y-8">
         <QuestionHeader
           title={question.question}

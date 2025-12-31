@@ -20,7 +20,9 @@ export default function Navbar({ streak }: NavbarProps) {
           <span className="rounded-full bg-white/10 px-3 py-1">
             🔥 Streak {streak ?? 0}
           </span>
-          <span className="text-lg">👤</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-blue-500/40 to-red-500/40 text-base shadow-lg shadow-black/30">
+            🏀
+          </span>
         </div>
       </div>
     </header>
