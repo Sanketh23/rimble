@@ -22,7 +22,7 @@ export default function PlayerCard({
       } sm:h-16 sm:w-16`;
     }
     if (logoSrc.includes("heat")) {
-      return `h-14 w-14 object-contain mix-blend-darken brightness-90 contrast-90 scale-120 ${
+      return `h-14 w-14 object-contain mix-blend-darken brightness-90 contrast-90 scale-125 ${
         isRevealed ? "opacity-90 saturate-100" : "opacity-75 saturate-90"
       } sm:h-16 sm:w-16`;
     }
