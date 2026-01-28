@@ -118,25 +118,39 @@ const sumPlayoffTripleDoubles = async (seasons) => {
   const totals = new Map();
 
   for (const season of seasons) {
-    const data = await fetchJson("leaguedashplayerstats", {
-      Season: season,
-      SeasonType: "Playoffs",
-      PerMode: "Totals",
-      MeasureType: "Base",
-      LeagueID: "00",
-      LastNGames: "0",
-      Month: "0",
-      OpponentTeamID: "0",
-      PaceAdjust: "N",
-      PlusMinus: "N",
-      Rank: "N",
-      Conference: "",
-      Division: "",
-      GameScope: "",
-      PlayerExperience: "",
-      PlayerPosition: "",
-      StarterBench: "",
-    });
+    let data;
+    try {
+      data = await fetchJson("leaguedashplayerstats", {
+        Season: season,
+        SeasonType: "Playoffs",
+        SeasonTypeAllStar: "Playoffs",
+        PerMode: "Totals",
+        MeasureType: "Base",
+        LeagueID: "00",
+        LastNGames: "0",
+        Month: "0",
+        OpponentTeamID: "0",
+        PaceAdjust: "N",
+        PlusMinus: "N",
+        Rank: "N",
+        Conference: "",
+        Division: "",
+        GameScope: "",
+        PlayerExperience: "",
+        PlayerPosition: "",
+        StarterBench: "",
+        SeasonSegment: "",
+        DateFrom: "",
+        DateTo: "",
+        Location: "",
+        Outcome: "",
+        VsConference: "",
+        VsDivision: "",
+      });
+    } catch (error) {
+      console.error(`Failed season ${season}:`, error?.message ?? error);
+      throw error;
+    }
 
     const resultSet = getResultSet(data);
     const headers = resultSet.headers;
